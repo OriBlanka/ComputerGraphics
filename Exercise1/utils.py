@@ -66,7 +66,6 @@ class SeamImage:
 
         (rows, columns, pixel) = np_img.shape
         grey_img = np.full((rows + 2, columns + 2, 1), 0.5)
-        # print(grey_img)
         weights_sum = sum(self.gs_weights)
         for row in range(1, rows - 1):
             for column in range(1, columns - 1):
@@ -76,7 +75,7 @@ class SeamImage:
         return grey_img
         raise NotImplementedError("TODO: Implement SeamImage.rgb_to_grayscale")
 
-    # TODO: Implementation for calc_gradient_magnitude method
+    # TODO: Implementation for calc_gradient_magnitude method - ORI + NIR
     def calc_gradient_magnitude(self):
         """ Calculate gradient magnitude of a grayscale image
 
@@ -140,6 +139,7 @@ class ColumnSeamImage(SeamImage):
         except NotImplementedError as e:
             print(e)
 
+    # TODO: NIR
     def calc_M(self):
         """ Calculates the matrix M discussed in lecture, but with the additional constraint:
             - A seam must be a column. That is, the set of seams S is simply columns of M.
@@ -155,6 +155,7 @@ class ColumnSeamImage(SeamImage):
         """
         raise NotImplementedError("TODO: Implement SeamImage.calc_M")
 
+    # TODO: ORI
     def seams_removal(self, num_remove: int):
         """ Iterates num_remove times and removes num_remove vertical seams
 
