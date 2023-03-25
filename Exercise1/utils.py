@@ -48,14 +48,14 @@ class SeamImage:
         self.seam_history = []
         self.seam_balance = 0
 
-        # This might serve you to keep tracking original pixel indices 
+        # This might serve you to keep tracking original pixel indices
         self.idx_map_h, self.idx_map_v = np.meshgrid(range(self.w), range(self.h))
 
     # TODO: Implementation for rgb_to_grayscale method
     def rgb_to_grayscale(self, np_img):
         """ Converts a np RGB image into grayscale (using self.gs_weights).
         Parameters
-            np_img : ndarray (float32) of shape (h, w, 3) 
+            np_img : ndarray (float32) of shape (h, w, 3)
         Returns:
             grayscale image (float32) of shape (h, w, 1)
 
@@ -63,11 +63,17 @@ class SeamImage:
             Use NumpyPy vectorized matrix multiplication for high performance.
             To prevent outlier values in the boundaries, we recommend to pad them with 0.5
         """
-        print(np_img)
-        print(np.pad(np_img, [(1, 0), (1, 0), (1, 0)], mode='constant'))
-        grey_img = np.dot(np_img, self.gs_weights)
-        return grey_img
 
+        (rows, columns, pixel) = np_img.shape
+        grey_img = np.full((rows + 2, columns + 2, 1), 0.5)
+        # print(grey_img)
+        weights_sum = sum(self.gs_weights)
+        for row in range(1, rows - 1):
+            for column in range(1, columns - 1):
+                grey_img[row, column] = np.dot(np_img[row, column], self.gs_weights)
+                grey_img[row, column] = grey_img[row, column] / weights_sum
+
+        return grey_img
         raise NotImplementedError("TODO: Implement SeamImage.rgb_to_grayscale")
 
     # TODO: Implementation for calc_gradient_magnitude method
@@ -136,7 +142,7 @@ class ColumnSeamImage(SeamImage):
 
     def calc_M(self):
         """ Calculates the matrix M discussed in lecture, but with the additional constraint:
-            - A seam must be a column. That is, the set of seams S is simply columns of M. 
+            - A seam must be a column. That is, the set of seams S is simply columns of M.
             - implement forward-looking cost
 
         Returns:
@@ -151,7 +157,7 @@ class ColumnSeamImage(SeamImage):
 
     def seams_removal(self, num_remove: int):
         """ Iterates num_remove times and removes num_remove vertical seams
-        
+
         Parameters:
             num_remove (int): number of vertical seam to be removed
 
@@ -238,7 +244,7 @@ class VerticalSeamImage(SeamImage):
 
     def seams_removal(self, num_remove: int):
         """ Iterates num_remove times and removes num_remove vertical seams
-        
+
         Parameters:
             num_remove (int): number of vertical seam to be removed
 
@@ -335,7 +341,7 @@ class VerticalSeamImage(SeamImage):
     # @jit(nopython=True)
     def calc_bt_mat(M, backtrack_mat):
         """ Fills the BT back-tracking index matrix. This function is static in order to support Numba. To use it, uncomment the decorator above.
-        
+
         Recommnded parameters (member of the class, to be filled):
             M: np.ndarray (float32) of shape (h,w)
             backtrack_mat: np.ndarray (int32) of shape (h,w): to be filled here
