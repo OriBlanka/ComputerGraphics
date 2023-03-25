@@ -1,3 +1,4 @@
+import numpy
 import numpy as np
 from PIL import Image
 from numba import jit
@@ -18,18 +19,18 @@ class SeamImage:
         # Do not change #
         #################
         self.path = img_path
-        
+
         self.gs_weights = np.array([[0.299, 0.587, 0.114]]).T
-        
+
         self.rgb = self.load_image(img_path)
         self.resized_rgb = self.rgb.copy()
 
         self.vis_seams = vis_seams
         if vis_seams:
             self.seams_rgb = self.rgb.copy()
-        
+
         self.h, self.w = self.rgb.shape[:2]
-        
+
         try:
             self.gs = self.rgb_to_grayscale(self.rgb)
             self.resized_gs = self.gs.copy()
@@ -62,6 +63,10 @@ class SeamImage:
             Use NumpyPy vectorized matrix multiplication for high performance.
             To prevent outlier values in the boundaries, we recommend to pad them with 0.5
         """
+        print(np_img)
+        print(np.pad(np_img, [(1, 0), (1, 0), (1, 0)], mode='constant'))
+        grey_img = np.dot(np_img, self.gs_weights)
+        return grey_img
 
         raise NotImplementedError("TODO: Implement SeamImage.rgb_to_grayscale")
 
@@ -75,11 +80,12 @@ class SeamImage:
         Guidelines & hints:
             In order to calculate a gradient of a pixel, only its neighborhood is required.
         """
+        return 0;
         raise NotImplementedError("TODO: Implement SeamImage.calc_gradient_magnitude")
-        
+
     def calc_M(self):
         pass
-             
+
     def seams_removal(self, num_remove):
         pass
 
@@ -118,6 +124,7 @@ class ColumnSeamImage(SeamImage):
     """ Column SeamImage.
     This class stores and implements all required data and algorithmics from implementing the "column" version of the seam carving algorithm.
     """
+
     def __init__(self, *args, **kwargs):
         """ ColumnSeamImage initialization.
         """
@@ -275,7 +282,7 @@ class VerticalSeamImage(SeamImage):
         """
 
         raise NotImplementedError("TODO: Implement SeamImage.seams_removal_vertical")
-    
+
     def backtrack_seam(self):
         """ Backtracks a seam for Seam Carving as taught in lecture
         """
@@ -288,7 +295,7 @@ class VerticalSeamImage(SeamImage):
         In order to apply the removal, you might want to extend the seam mask to support 3 channels (rgb) using: 3d_mak = np.stack([1d_mask] * 3, axis=2), and then use it to create a resized version.
         """
         raise NotImplementedError("TODO: Implement SeamImage.remove_seam")
-    
+
     def seams_addition(self, num_add: int):
         """ BONUS: adds num_add seamn to the image
 
@@ -302,7 +309,7 @@ class VerticalSeamImage(SeamImage):
 
         """
         raise NotImplementedError("TODO: Implement SeamImage.seams_addition")
-    
+
     def seams_addition_horizontal(self, num_add):
         """ A wrapper for removing num_add horizontal seams (just a recommendation)
 
@@ -338,6 +345,7 @@ class VerticalSeamImage(SeamImage):
         """
         raise NotImplementedError("TODO: Implement SeamImage.calc_bt_mat")
 
+
 def scale_to_shape(orig_shape: np.ndarray, scale_factors: list):
     """ Converts scale into shape
 
@@ -349,6 +357,7 @@ def scale_to_shape(orig_shape: np.ndarray, scale_factors: list):
         the new shape
     """
     raise NotImplementedError("TODO: Implement SeamImage.scale_to_shape")
+
 
 def resize_seam_carving(seam_img: SeamImage, shapes: np.ndarray):
     """ Resizes an image using Seam Carving algorithm
@@ -362,6 +371,7 @@ def resize_seam_carving(seam_img: SeamImage, shapes: np.ndarray):
     """
     raise NotImplementedError("TODO: Implement SeamImage.resize_seam_carving")
 
+
 def bilinear(image, new_shape):
     """
     Resizes an image to new shape using bilinear interpolation method
@@ -372,22 +382,24 @@ def bilinear(image, new_shape):
     in_height, in_width, _ = image.shape
     out_height, out_width = new_shape
     new_image = np.zeros(new_shape)
+
     ###Your code here###
     def get_scaled_param(org, size_in, size_out):
         scaled_org = (org * size_in) / size_out
         scaled_org = min(scaled_org, size_in - 1)
         return scaled_org
-    scaled_x_grid = [get_scaled_param(x,in_width,out_width) for x in range(out_width)]
-    scaled_y_grid = [get_scaled_param(y,in_height,out_height) for y in range(out_height)]
+
+    scaled_x_grid = [get_scaled_param(x, in_width, out_width) for x in range(out_width)]
+    scaled_y_grid = [get_scaled_param(y, in_height, out_height) for y in range(out_height)]
     x1s = np.array(scaled_x_grid, dtype=int)
-    y1s = np.array(scaled_y_grid,dtype=int)
+    y1s = np.array(scaled_y_grid, dtype=int)
     x2s = np.array(scaled_x_grid, dtype=int) + 1
     x2s[x2s > in_width - 1] = in_width - 1
-    y2s = np.array(scaled_y_grid,dtype=int) + 1
+    y2s = np.array(scaled_y_grid, dtype=int) + 1
     y2s[y2s > in_height - 1] = in_height - 1
     dx = np.reshape(scaled_x_grid - x1s, (out_width, 1))
     dy = np.reshape(scaled_y_grid - y1s, (out_height, 1))
-    c1 = np.reshape(image[y1s][:,x1s] * dx + (1 - dx) * image[y1s][:,x2s], (out_width, out_height, 3))
-    c2 = np.reshape(image[y2s][:,x1s] * dx + (1 - dx) * image[y2s][:,x2s], (out_width, out_height, 3))
+    c1 = np.reshape(image[y1s][:, x1s] * dx + (1 - dx) * image[y1s][:, x2s], (out_width, out_height, 3))
+    c2 = np.reshape(image[y2s][:, x1s] * dx + (1 - dx) * image[y2s][:, x2s], (out_width, out_height, 3))
     new_image = np.reshape(c1 * dy + (1 - dy) * c2, (out_height, out_width, 3)).astype(int)
     return new_image
