@@ -85,7 +85,23 @@ class SeamImage:
         Guidelines & hints:
             In order to calculate a gradient of a pixel, only its neighborhood is required.
         """
-        return 0;
+        (rows, columns, pixel) = self.gs.shape
+        pixel_energy = np.zeros((rows, columns))
+        for row in range(rows):
+            for column in range(columns):
+
+                if column < columns - 1:
+                    e_ver = abs(self.gs[row, column] - self.gs[row, column + 1])
+                else:
+                    e_ver = abs(self.gs[row, column] - self.gs[row, column - 1])
+
+                if row < rows - 1:
+                    e_hor = abs(self.gs[row, column] - self.gs[row + 1, column])
+                else:
+                    e_hor = abs(self.gs[row, column] - self.gs[row - 1, column])
+                pixel_energy[row, column] = np.sqrt(np.square(e_ver) + np.square(e_hor))
+
+        return pixel_energy
         raise NotImplementedError("TODO: Implement SeamImage.calc_gradient_magnitude")
 
     def calc_M(self):
