@@ -64,17 +64,9 @@ class SeamImage:
             To prevent outlier values in the boundaries, we recommend to pad them with 0.5
         """
 
-        (rows, columns, pixel) = np_img.shape
-        grey_img = np.zeros((rows, columns, 1))
-        weights_sum = sum(self.gs_weights)
-        for row in range(rows):
-            for column in range(columns):
-                grey_img[row, column] = np.dot(np_img[row, column], self.gs_weights)
-                grey_img[row, column] = grey_img[row, column] / weights_sum
-
+        grey_img = np.dot(np_img, self.gs_weights)
         grey_img = np.pad(grey_img, ((1, 1), (1, 1), (0, 0)), mode='constant', constant_values=0.5)
         return grey_img
-        raise NotImplementedError("TODO: Implement SeamImage.rgb_to_grayscale")
 
     # TODO: Implementation for calc_gradient_magnitude method - ORI + NIR
     def calc_gradient_magnitude(self):
@@ -170,23 +162,10 @@ class ColumnSeamImage(SeamImage):
             The formula of calculation M is as taught, but with certain terms omitted.
             You might find the function 'np.roll' useful.
         """
-        m_costs = np.zeros((self.h, self.w))
-        cost_x = np.abs(np.roll(self.E, 1, axis=1) - np.roll(self.E, -1, axis=1))
-        cost_y = np.abs(np.roll(self.E, 1, axis=0) - np.roll(self.E, -1, axis=0))
-        m = cost_x + cost_y
-
-        m_costs = m[0]
-
-        for i in range(1, self.h):
-            cost_x = np.roll(m_costs, -1, axis=0)
-            cost_x[-1] = np.inf
-            cost_y = np.roll(m_costs, 1, axis=0)
-            cost_y[0] = np.inf
-            min_cost = np.minimum(np.minimum(cost_x, cost_y), m_costs)
-            m_costs[i] = 11 # m[i] + min_cost
-
-        return m_costs.T
-        raise NotImplementedError("TODO: Implement SeamImage.calc_M")
+        cost_vertical = np.abs(np.roll(self.E, 1, axis=1) - np.roll(self.E, -1, axis=1))
+        m_costs = self.E + cost_vertical
+        m_costs = np.cumsum(m_costs, axis=0)
+        return m_costs
 
     # TODO: ORI
     def seams_removal(self, num_remove: int):
@@ -274,7 +253,10 @@ class VerticalSeamImage(SeamImage):
             As taught, the energy is calculated from top to bottom.
             You might find the function 'np.roll' useful.
         """
-        raise NotImplementedError("TODO: Implement SeamImage.calc_M")
+        cost_horizontal = np.abs(np.roll(self.E, 1, axis=0) - np.roll(self.E, -1, axis=0))
+        m_costs = self.E + cost_horizontal
+        m_costs = np.cumsum(m_costs, axis=1)
+        return m_costs
 
     def seams_removal(self, num_remove: int):
         """ Iterates num_remove times and removes num_remove vertical seams
