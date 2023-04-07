@@ -191,9 +191,17 @@ class ColumnSeamImage(SeamImage):
             - removing seams couple of times (call the function more than once)
             - visualize the original image with removed seams marked (for comparison)
         """
+        for i in range(num_remove):
+            min_index = np.argmin(self.M[-1, :])
+            self.update_E(min_index)
+            self.update_M(min_index)
+            self.backtrack_seam()
+            self.remove_seam()
+
         raise NotImplementedError("TODO: Implement SeamImage.seams_removal")
 
     def update_E(self, seam_idx):
+
         raise NotImplementedError("TODO: Implement SeamImage.update_E")
 
     def update_M(self, seam_idx):
