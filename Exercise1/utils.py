@@ -78,7 +78,9 @@ class SeamImage:
         Guidelines & hints:
             In order to calculate a gradient of a pixel, only its neighborhood is required.
         """
-        (rows, columns, pixel) = self.gs.shape
+
+        rows = self.h
+        columns = self.w
         pixel_energy = np.zeros((rows, columns))
         for row in range(rows):
             for column in range(columns):
@@ -191,6 +193,7 @@ class ColumnSeamImage(SeamImage):
             - removing seams couple of times (call the function more than once)
             - visualize the original image with removed seams marked (for comparison)
         """
+
         for i in range(num_remove):
             min_index = np.argmin(self.M[-1, :])
             self.update_E(min_index)
@@ -201,11 +204,34 @@ class ColumnSeamImage(SeamImage):
         raise NotImplementedError("TODO: Implement SeamImage.seams_removal")
 
     def update_E(self, seam_idx):
+        (rows, columns) = self.E.shape
+        if 0 < seam_idx < columns - 1:
+            for row in range(rows):
+                e_ver = abs(self.gs[row, seam_idx - 1] - self.gs[row, seam_idx + 1])
+                if row < rows - 1:
+                    e_hor = abs(self.gs[row, seam_idx - 1] - self.gs[row + 1, seam_idx - 1])
+                else:
+                    e_hor = abs(self.gs[row, seam_idx - 1] - self.gs[row - 1, seam_idx - 1])
 
-        raise NotImplementedError("TODO: Implement SeamImage.update_E")
+                self.E[row, seam_idx - 1] = np.sqrt(np.square(e_ver) + np.square(e_hor))
+
+        elif seam_idx == columns - 1:
+            for row in range(rows):
+                e_ver = abs(self.gs[row, seam_idx - 1] - self.gs[row, seam_idx - 2])
+                if row < rows - 1:
+                    e_hor = abs(self.gs[row, seam_idx - 1] - self.gs[row + 1, seam_idx - 1])
+                else:
+                    e_hor = abs(self.gs[row, seam_idx - 1] - self.gs[row - 1, seam_idx - 1])
+
+                self.E[row, seam_idx - 1] = np.sqrt(np.square(e_ver) + np.square(e_hor))
 
     def update_M(self, seam_idx):
-        raise NotImplementedError("TODO: Implement SeamImage.update_E")
+        cost_vertical = np.abs(np.roll(self.E, 1, axis=1) - np.roll(self.E, -1, axis=1))
+        m_costs = self.E + cost_vertical
+        m_costs = np.cumsum(m_costs, axis=0)
+
+
+        raise NotImplementedError("TODO: Implement SeamImage.update_M")
 
     def seams_removal_horizontal(self, num_remove):
         """ Removes num_remove horizontal seams
@@ -238,6 +264,8 @@ class ColumnSeamImage(SeamImage):
         Guidelines & hints:
         In order to apply the removal, you might want to extend the seam mask to support 3 channels (rgb) using: 3d_mak = np.stack([1d_mask] * 3, axis=2), and then use it to create a resized version.
         """
+        # TODO: change this method
+        self.resized_gs.remove(0)
         raise NotImplementedError("TODO: Implement SeamImage.remove_seam")
 
 
