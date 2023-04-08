@@ -225,13 +225,23 @@ class ColumnSeamImage(SeamImage):
 
                 self.E[row, seam_idx - 1] = np.sqrt(np.square(e_ver) + np.square(e_hor))
 
+        # Remove the seam at the given index
+        self.E = np.delete(self.E, seam_idx, axis=1)
+
+
     def update_M(self, seam_idx):
-        cost_vertical = np.abs(np.roll(self.E, 1, axis=1) - np.roll(self.E, -1, axis=1))
-        m_costs = self.E + cost_vertical
-        m_costs = np.cumsum(m_costs, axis=0)
+        # Remove the seam at the given index
+        self.M = np.delete(self.M, seam_idx, axis=1)
 
+        # Calculate the difference between adjacent columns in the energy matrix E
+        diff = np.abs(np.roll(self.E, 1, axis=1) - np.roll(self.E, -1, axis=1))
+        # Update the columns to the left of the removed seam
+        self.M[:, seam_idx - 1:seam_idx + 1] = self.E[:, seam_idx - 1:seam_idx + 1] + diff[:, seam_idx - 1:seam_idx + 1]
+        # Update the rest of the matrix using the dynamic programming approach
+        for i in range(1, self.M.shape[0]):
+            for j in range(max(seam_idx - 1, 0), min(seam_idx + 2, self.M.shape[1])):
+                self.M[i, j] += np.min(self.M[i - 1, max(j - 1, 0):min(j + 2, self.M.shape[1])])
 
-        raise NotImplementedError("TODO: Implement SeamImage.update_M")
 
     def seams_removal_horizontal(self, num_remove):
         """ Removes num_remove horizontal seams
