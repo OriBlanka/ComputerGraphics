@@ -4,6 +4,7 @@ from PIL import Image
 from numba import jit
 from tqdm import tqdm
 from abc import abstractmethod, abstractstaticmethod
+import time
 
 
 class SeamImage:
@@ -24,6 +25,8 @@ class SeamImage:
 
         self.rgb = self.load_image(img_path)
         self.resized_rgb = self.rgb.copy()
+        self.gs_squeezed = None
+        self.dx, self.dy = None, None
 
         self.vis_seams = vis_seams
         if vis_seams:
@@ -51,6 +54,8 @@ class SeamImage:
         # This might serve you to keep tracking original pixel indices
         self.idx_map_h, self.idx_map_v = np.meshgrid(range(self.w), range(self.h))
 
+
+
     # TODO: Implementation for rgb_to_grayscale method
     def rgb_to_grayscale(self, np_img):
         """ Converts a np RGB image into grayscale (using self.gs_weights).
@@ -65,7 +70,8 @@ class SeamImage:
         """
 
         grey_img = np.dot(np_img, self.gs_weights)
-        grey_img = np.pad(grey_img, ((1, 1), (1, 1), (0, 0)), mode='constant', constant_values=0.5)
+        # grey_img = np.pad(grey_img, ((1, 1), (1, 1), (0, 0)), mode='constant', constant_values=0.5)
+        self.gs_squeezed = grey_img.squeeze()
         return grey_img
 
     # TODO: Implementation for calc_gradient_magnitude method - ORI + NIR
@@ -79,6 +85,13 @@ class SeamImage:
             In order to calculate a gradient of a pixel, only its neighborhood is required.
         """
 
+        gs = self.gs_squeezed
+        self.dx = np.diff(gs, axis=0, append=gs[[-2]])
+        self.dy = np.diff(gs, axis=1, append=gs[:, [-2]])
+        pixel_energy = np.sqrt(np.square(self.dx) + np.square(self.dy))
+
+        """
+        start = time.time()
         rows = self.h
         columns = self.w
         pixel_energy = np.zeros((rows, columns))
@@ -95,9 +108,12 @@ class SeamImage:
                 else:
                     e_hor = abs(self.gs[row, column] - self.gs[row - 1, column])
                 pixel_energy[row, column] = np.sqrt(np.square(e_ver) + np.square(e_hor))
+        end = time.time()
+        print(f"öld way: {end-start}")
+        """
 
         return pixel_energy
-        raise NotImplementedError("TODO: Implement SeamImage.calc_gradient_magnitude")
+        # raise NotImplementedError("TODO: Implement SeamImage.calc_gradient_magnitude")
 
     def calc_M(self):
         pass
@@ -147,6 +163,7 @@ class ColumnSeamImage(SeamImage):
         super().__init__(*args, **kwargs)
         try:
             self.M = self.calc_M()
+            self.M_copy = np.copy(self.M)
         except NotImplementedError as e:
             print(e)
 
@@ -164,7 +181,9 @@ class ColumnSeamImage(SeamImage):
             The formula of calculation M is as taught, but with certain terms omitted.
             You might find the function 'np.roll' useful.
         """
-        cost_vertical = np.abs(np.roll(self.E, 1, axis=1) - np.roll(self.E, -1, axis=1))
+        cost_vertical = np.abs(np.roll(self.gs, 1, axis=1) - np.roll(self.gs, -1, axis=1)).squeeze()
+        # cost_vertical[:, 0] = 0
+        # cost_vertical[:, -1] = 0
         m_costs = self.E + cost_vertical
         m_costs = np.cumsum(m_costs, axis=0)
         return m_costs
@@ -193,55 +212,75 @@ class ColumnSeamImage(SeamImage):
             - removing seams couple of times (call the function more than once)
             - visualize the original image with removed seams marked (for comparison)
         """
-
+        # self.seam_balance = 0
+        # self.seam_history = []
         for i in range(num_remove):
             min_index = np.argmin(self.M[-1, :])
+            removed_before_rel = sum(self.seam_history <= min_index)
+            cand = min_index + removed_before_rel
+            while cand in self.seam_history:
+                cand += 1
+            min_index_abs = cand
+            print(min_index, min_index_abs)
+
+            self.seam_balance += 1
+            self.seam_history.append(min_index_abs)
+
             self.update_E(min_index)
             self.update_M(min_index)
-            self.backtrack_seam()
-            self.remove_seam()
+            self.backtrack_seam(min_index_abs)
+            self.remove_seam(min_index)
 
-        raise NotImplementedError("TODO: Implement SeamImage.seams_removal")
+        # raise NotImplementedError("TODO: Implement SeamImage.seams_removal")
 
     def update_E(self, seam_idx):
+        # Remove the seam at the given index
         (rows, columns) = self.E.shape
-        if 0 < seam_idx < columns - 1:
-            for row in range(rows):
-                e_ver = abs(self.gs[row, seam_idx - 1] - self.gs[row, seam_idx + 1])
-                if row < rows - 1:
-                    e_hor = abs(self.gs[row, seam_idx - 1] - self.gs[row + 1, seam_idx - 1])
-                else:
-                    e_hor = abs(self.gs[row, seam_idx - 1] - self.gs[row - 1, seam_idx - 1])
+        self.E = np.delete(self.E, seam_idx, axis=1)
+        self.dx = np.delete(self.dx, seam_idx, axis=1)
+        self.dy = np.delete(self.dy, seam_idx, axis=1)
+        gs = self.gs_squeezed
 
-                self.E[row, seam_idx - 1] = np.sqrt(np.square(e_ver) + np.square(e_hor))
+        if 0 < seam_idx < columns - 1:
+            self.dy[:, seam_idx - 1] = gs[:, seam_idx - 1] - gs[:, seam_idx + 1]
+            self.E[:, seam_idx - 1] = np.sqrt(np.square(self.dy[:, seam_idx - 1]) + np.square(self.dx[:, seam_idx - 1]))
+            # for row in range(rows):
+            #     e_ver = abs(self.gs[row, seam_idx - 1] - self.gs[row, seam_idx + 1])
+            #     if row < rows - 1:
+            #         e_hor = abs(self.gs[row, seam_idx - 1] - self.gs[row + 1, seam_idx - 1])
+            #     else:
+            #         e_hor = abs(self.gs[row, seam_idx - 1] - self.gs[row - 1, seam_idx - 1])
+            #
+            #     self.E[row, seam_idx - 1] = np.sqrt(np.square(e_ver) + np.square(e_hor))
 
         elif seam_idx == columns - 1:
-            for row in range(rows):
-                e_ver = abs(self.gs[row, seam_idx - 1] - self.gs[row, seam_idx - 2])
-                if row < rows - 1:
-                    e_hor = abs(self.gs[row, seam_idx - 1] - self.gs[row + 1, seam_idx - 1])
-                else:
-                    e_hor = abs(self.gs[row, seam_idx - 1] - self.gs[row - 1, seam_idx - 1])
-
-                self.E[row, seam_idx - 1] = np.sqrt(np.square(e_ver) + np.square(e_hor))
-
-        # Remove the seam at the given index
-        self.E = np.delete(self.E, seam_idx, axis=1)
-
+            self.dy[:, seam_idx - 1] = gs[:, seam_idx - 1] - gs[:, seam_idx - 2]
+            self.E[:, seam_idx - 1] = np.sqrt(np.square(self.dy[:, seam_idx - 1]) + np.square(self.dx[:, seam_idx - 1]))
+            # for row in range(rows):
+            #     e_ver = abs(self.gs[row, seam_idx - 1] - self.gs[row, seam_idx - 2])
+            #     if row < rows - 1:
+            #         e_hor = abs(self.gs[row, seam_idx - 1] - self.gs[row + 1, seam_idx - 1])
+            #     else:
+            #         e_hor = abs(self.gs[row, seam_idx - 1] - self.gs[row - 1, seam_idx - 1])
+            #
+            #     self.E[row, seam_idx - 1] = np.sqrt(np.square(e_ver) + np.square(e_hor))
 
     def update_M(self, seam_idx):
         # Remove the seam at the given index
+        (rows, columns) = self.M.shape
         self.M = np.delete(self.M, seam_idx, axis=1)
-
-        # Calculate the difference between adjacent columns in the energy matrix E
-        diff = np.abs(np.roll(self.E, 1, axis=1) - np.roll(self.E, -1, axis=1))
-        # Update the columns to the left of the removed seam
-        self.M[:, seam_idx - 1:seam_idx + 1] = self.E[:, seam_idx - 1:seam_idx + 1] + diff[:, seam_idx - 1:seam_idx + 1]
-        # Update the rest of the matrix using the dynamic programming approach
-        for i in range(1, self.M.shape[0]):
-            for j in range(max(seam_idx - 1, 0), min(seam_idx + 2, self.M.shape[1])):
-                self.M[i, j] += np.min(self.M[i - 1, max(j - 1, 0):min(j + 2, self.M.shape[1])])
-
+        gs = self.gs_squeezed
+        if 0 < seam_idx < columns - 1:
+            if seam_idx >= 2:
+                edges_cost_left = np.abs(gs[:, seam_idx-2]-gs[:, seam_idx+1])
+                self.M[:, seam_idx-1] = self.E[:, seam_idx-1] + edges_cost_left
+            if seam_idx <= columns-2:
+                edges_cost_right = np.abs(gs[:, seam_idx+2]-gs[:, seam_idx-1])
+                self.M[:, seam_idx] = self.E[:, seam_idx] + edges_cost_right
+        elif seam_idx==0:
+            self.M[:, 0] = self.E[:, 0]
+        else:
+            self.M[:, -1] = self.E[:, -1]
 
     def seams_removal_horizontal(self, num_remove):
         """ Removes num_remove horizontal seams
@@ -253,7 +292,21 @@ class ColumnSeamImage(SeamImage):
             You may find np.rot90 function useful
 
         """
-        raise NotImplementedError("TODO: Implement SeamImage.seams_removal_horizontal")
+        self.resized_gs = np.rot90(self.resized_gs, 1, (0, 1))
+        self.resized_rgb = np.rot90(self.resized_rgb, 1, (0, 1))
+        self.gs_squeezed = np.rot90(self.gs_squeezed, 1, (0, 1))
+        self.dx, self.dy = np.rot90(self.dy, 1, (0, 1)), np.rot90(self.dx, 1, (0, 1))
+        self.E = np.rot90(self.E, 1, (0, 1))
+        self.M = np.rot90(np.diff(self.M, axis=0, prepend=0), 1, (0, 1)).cumsum(axis=0)
+        self.seams_removal_vertical(num_remove)
+        self.resized_gs = np.rot90(self.resized_gs, 3, (0, 1))
+        self.resized_rgb = np.rot90(self.resized_rgb, 3, (0, 1))
+        self.gs_squeezed = np.rot90(self.gs_squeezed, 3, (0, 1))
+        self.dx, self.dy = np.rot90(self.dy, 3, (0, 1)), np.rot90(self.dx, 3, (0, 1))
+        self.E = np.rot90(self.E, 3, (0, 1))
+        self.M = np.rot90(np.diff(self.M, axis=0, prepend=0), 3, (0, 1)).cumsum(axis=0)
+
+        # raise NotImplementedError("TODO: Implement SeamImage.seams_removal_horizontal")
 
     def seams_removal_vertical(self, num_remove):
         """ A wrapper for removing num_remove horizontal seams (just a recommendation)
@@ -261,22 +314,28 @@ class ColumnSeamImage(SeamImage):
         Parameters:
             num_remove (int): number of vertical seam to be removed
         """
-        raise NotImplementedError("TODO: Implement SeamImage.seams_removal_vertical")
+        self.seams_removal(num_remove)
+        # raise NotImplementedError("TODO: Implement SeamImage.seams_removal_vertical")
 
-    def backtrack_seam(self):
+    def backtrack_seam(self, seam_idx):
         """ Backtracks a seam for Column Seam Carving method
         """
-        raise NotImplementedError("TODO: Implement SeamImage.backtrack_seam")
+        self.cumm_mask[:, seam_idx] = False
+        self.seams_rgb[:, seam_idx, :] = [1, 0, 0]
+        #self.M_copy[:, seam_idx, :] = [1, 0, 0]
+        # raise NotImplementedError("TODO: Implement SeamImage.backtrack_seam")
 
-    def remove_seam(self):
+    def remove_seam(self, seam_idx):
         """ Removes a seam for self.rgb (you may create a resized version, like self.resized_rgb)
 
         Guidelines & hints:
         In order to apply the removal, you might want to extend the seam mask to support 3 channels (rgb) using: 3d_mak = np.stack([1d_mask] * 3, axis=2), and then use it to create a resized version.
         """
         # TODO: change this method
-        self.resized_gs.remove(0)
-        raise NotImplementedError("TODO: Implement SeamImage.remove_seam")
+        self.gs_squeezed = np.delete(self.gs_squeezed, seam_idx, axis=1)
+        self.resized_gs = np.delete(self.resized_gs, seam_idx, axis=1)
+        self.resized_rgb = np.delete(self.resized_rgb, seam_idx, axis=1)
+        # raise NotImplementedError("TODO: Implement SeamImage.remove_seam")
 
 
 class VerticalSeamImage(SeamImage):
@@ -471,3 +530,98 @@ def bilinear(image, new_shape):
     c2 = np.reshape(image[y2s][:, x1s] * dx + (1 - dx) * image[y2s][:, x2s], (out_width, out_height, 3))
     new_image = np.reshape(c1 * dy + (1 - dy) * c2, (out_height, out_width, 3)).astype(int)
     return new_image
+
+
+import numba
+import numpy as np
+import matplotlib.pyplot as plt
+from functools import partial
+from PIL import Image
+from numba import jit
+from utils import SeamImage, ColumnSeamImage, VerticalSeamImage
+
+plt.rcParams["figure.figsize"] = (10,5)
+#%%
+# img_path = "pinguins.jpg"
+img_path = "sunset.JPG"
+
+# helper functions
+def read_image(img_path):
+    return np.asarray(Image.open(img_path)).astype('float32')
+
+
+def show_image(np_img, grayscale=False):
+    fig, ax = plt.subplots()
+    if not grayscale:
+        ax.imshow(np_img)
+    else:
+        ax.imshow(np_img, cmap=plt.get_cmap('gray'))
+    ax.axis("off")
+    plt.show()
+
+def init_plt_grid(nrow=1, ncols=1, figsize=(20,10), **kwargs):
+    fig, ax = plt.subplots(nrow, ncols, figsize=figsize, facecolor='gray', **kwargs)
+    font_size = dict(size=20)
+    return ax, font_size
+
+### 1. Imaplement SeamImage (20 points)
+#%%
+# TODO: Create a SeamImage instance
+s_img = SeamImage(img_path)
+
+# display sample image we will be working on
+show_image(s_img.rgb)
+
+# disply grayscale version
+show_image(s_img.gs, grayscale=True)
+
+# display its energy (gradient magnitude)
+show_image(s_img.E, grayscale=True)
+
+# TODO: Create a ColumnSeamImage instance
+cs_img = ColumnSeamImage(img_path)
+#%%
+# dispay matrices
+
+ax, font_size = init_plt_grid(ncols=3, figsize=(20,10))
+
+ax[0].set_title('Original Image', **font_size)
+ax[1].set_title('Gradient Magnitude Image (E)', **font_size)
+ax[2].set_title('Energy Matric (M)', **font_size)
+
+ax[0].imshow(cs_img.rgb)
+ax[1].imshow(cs_img.E, cmap='gray')
+ax[2].imshow(cs_img.M, cmap="gray")
+
+# dp_mat = vs_img.calc_dp_mat(vs_img.M.copy(), np.zeros_like(vs_img.M, dtype=int))
+# ax[1,1].imshow(dp_mat)
+
+for sp in ax.reshape(-1):
+    sp.set_xticks([])
+    sp.set_yticks([])
+
+plt.tight_layout()
+
+# remove seams (modify as you with)
+cs_img.seams_removal_vertical(200)
+#cs_img.seams_removal_horizontal(110)
+
+
+ax, font_size = init_plt_grid(ncols=3, figsize=(20,10))
+
+ax[0].set_title('Original Image', **font_size)
+ax[1].set_title('Seam Visualization', **font_size)
+ax[2].set_title('Resized Image', **font_size)
+
+ax[0].imshow(cs_img.rgb)
+ax[1].imshow(cs_img.seams_rgb)
+ax[2].imshow(cs_img.resized_rgb)
+
+# save resized version
+Image.fromarray((cs_img.resized_rgb*255).astype('uint8')).save('./resized_rgb.jpg')
+
+for sp in ax.reshape(-1):
+    sp.set_xticks([])
+    sp.set_yticks([])
+
+plt.tight_layout()
