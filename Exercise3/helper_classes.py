@@ -9,7 +9,7 @@ def normalize(vector):
 # This function gets a vector and the normal of the surface it hit
 # This function returns the vector that reflects from the surface
 def reflected(vector, axis):
-    # TODO:
+    # TODO: ORI
     v = np.array([0,0,0])
     return v
 
@@ -21,6 +21,7 @@ class LightSource:
         self.intensity = intensity
 
 
+# TODO : ORI
 class DirectionalLight(LightSource):
 
     def __init__(self, intensity, direction):
@@ -64,7 +65,7 @@ class PointLight(LightSource):
         d = self.get_distance_from_light(intersection)
         return self.intensity / (self.kc + self.kl*d + self.kq * (d**2))
 
-
+#TODO: NIR
 class SpotLight(LightSource):
     def __init__(self, intensity, position, direction, kc, kl, kq):
         super().__init__(intensity)
@@ -83,7 +84,7 @@ class SpotLight(LightSource):
         #TODO
         pass
 
-
+#TOOD: ORI
 class Ray:
     def __init__(self, origin, direction):
         self.origin = origin
@@ -176,6 +177,7 @@ class Cuboid(Object3D):
         #TODO
         pass
 
+#TODO: NIR
 class Sphere(Object3D):
     def __init__(self, center, radius: float):
         self.center = center

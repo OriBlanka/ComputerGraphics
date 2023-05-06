@@ -7,26 +7,26 @@ def render_scene(camera, ambient, lights, objects, screen_size, max_depth):
     screen = (-1, 1 / ratio, 1, -1 / ratio)  # left, top, right, bottom
 
     image = np.zeros((height, width, 3))
+    numerate(np.linspace(screen[1], screen[3], height)):
+    for j, x in enumerate(np.linspace(screen[0], screen[2], width)):
+        # screen is on origin
+        pixel = np.array([x, y, 0])
+        origin = camera
+        direction = normalize(pixel - origin)
+        ray = Ray(origin, direction)
 
-    for i, y in enumerate(np.linspace(screen[1], screen[3], height)):
-        for j, x in enumerate(np.linspace(screen[0], screen[2], width)):
-            # screen is on origin
-            pixel = np.array([x, y, 0])
-            origin = camera
-            direction = normalize(pixel - origin)
-            ray = Ray(origin, direction)
+        color = np.zeros(3)
 
-            color = np.zeros(3)
+        # This is the main loop where each pixel color is computed.
+        # TODO
 
-            # This is the main loop where each pixel color is computed.
-            # TODO
+        # We clip the values between 0 and 1 so all pixel values will make sense.
+        image[i, j] = np.clip(color, 0, 1)
 
-            
-            # We clip the values between 0 and 1 so all pixel values will make sense.
-            image[i, j] = np.clip(color,0,1)
 
-    return image
+return image
 
+for i, y in e
 
 # Write your own objects and lights
 # TODO
