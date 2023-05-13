@@ -66,20 +66,26 @@ class PointLight(LightSource):
 class SpotLight(LightSource):
     def __init__(self, intensity, position, direction, kc, kl, kq):
         super().__init__(intensity)
-        # TODO
+        self.position = np.array(position)
+        self.direction = np.array(direction)
+        self.kc = kc
+        self.kl = kl
+        self.kq = kq
 
     # This function returns the ray that goes from the light source to a point
     def get_light_ray(self, intersection):
-        #TODO
-        pass
+        v_direction = normalize(self.position - intersection)
+        return Ray(intersection, v_direction)
+
 
     def get_distance_from_light(self, intersection):
-        #TODO
-        pass
+        return np.linalg.norm(intersection - self.position)
 
     def get_intensity(self, intersection):
-        #TODO
-        pass
+        d = self.get_distance_from_light(intersection)
+        f_att = (self.kc + self.kl * d + self.kq * (d ** 2))
+        lr = self.get_light_ray(intersection)
+        return self.intensity * (np.dot(self.direction, lr.direction)) / f_att
 
 #TOOD: ORI
 class Ray:
@@ -181,6 +187,12 @@ class Sphere(Object3D):
         self.radius = radius
 
     def intersect(self, ray: Ray):
-        #TODO
-        pass
-
+        b = 2 * np.dot(ray.direction, ray.origin - self.center)
+        c = np.linalg.norm(ray.origin - self.center) ** 2 - (self.radius ** 2)
+        squerEqueation = b ** 2 - 4 * c
+        if squerEqueation > 0:
+            x1 = (-b + np.sqrt(squerEqueation)) / 2
+            x2 = (-b - np.sqrt(squerEqueation)) / 2
+            if x1 > 0 and x2 > 0:
+                return min(x1, x2), self
+        return None, None
