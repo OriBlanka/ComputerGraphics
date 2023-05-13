@@ -9,8 +9,8 @@ def normalize(vector):
 # This function gets a vector and the normal of the surface it hit
 # This function returns the vector that reflects from the surface
 def reflected(vector, axis):
-    # TODO: ORI
     v = np.array([0,0,0])
+    v = normalize(vector - 2 * (np.dot(vector, axis)) * axis)
     return v
 
 ## Lights
@@ -26,22 +26,19 @@ class DirectionalLight(LightSource):
 
     def __init__(self, intensity, direction):
         super().__init__(intensity)
-        # TODO
+        self.direction = direction
 
     # This function returns the ray that goes from the light source to a point
     def get_light_ray(self,intersection_point):
-        # TODO
-        return Ray()
+        return Ray(intersection_point, self.direction)
 
     # This function returns the distance from a point to the light source
     def get_distance_from_light(self, intersection):
-        #TODO
-        pass
+        return np.inf
 
     # This function returns the light intensity at a point
     def get_intensity(self, intersection):
-        #TODO
-        pass
+        return self.intensity
 
 
 class PointLight(LightSource):
