@@ -1,5 +1,6 @@
 import numpy as np
 
+EPSILON = 0.00001
 
 # This function gets a vector and returns its normalized form.
 def normalize(vector):
@@ -9,9 +10,12 @@ def normalize(vector):
 # This function gets a vector and the normal of the surface it hit
 # This function returns the vector that reflects from the surface
 def reflected(vector, axis):
-    v = np.array([0,0,0])
+    v = np.array([0, 0, 0])
     v = normalize(vector - 2 * (np.dot(vector, axis)) * axis)
     return v
+
+def calculate_reflected_ray(vector, intersection_point, normal_vector):
+    return Ray(origin=intersection_point, direction=reflected(vector=vector, axis=normal_vector))
 
 ## Lights
 
@@ -21,7 +25,6 @@ class LightSource:
         self.intensity = intensity
 
 
-# TODO : ORI
 class DirectionalLight(LightSource):
 
     def __init__(self, intensity, direction):
@@ -29,7 +32,7 @@ class DirectionalLight(LightSource):
         self.direction = direction
 
     # This function returns the ray that goes from the light source to a point
-    def get_light_ray(self,intersection_point):
+    def get_light_ray(self, intersection_point):
         return Ray(intersection_point, self.direction)
 
     # This function returns the distance from a point to the light source
@@ -50,19 +53,19 @@ class PointLight(LightSource):
         self.kq = kq
 
     # This function returns the ray that goes from the light source to a point
-    def get_light_ray(self,intersection):
-        return Ray(intersection,normalize(self.position - intersection))
+    def get_light_ray(self, intersection):
+        return Ray(intersection, normalize(self.position - intersection))
 
     # This function returns the distance from a point to the light source
-    def get_distance_from_light(self,intersection):
+    def get_distance_from_light(self, intersection):
         return np.linalg.norm(intersection - self.position)
 
     # This function returns the light intensity at a point
     def get_intensity(self, intersection):
         d = self.get_distance_from_light(intersection)
-        return self.intensity / (self.kc + self.kl*d + self.kq * (d**2))
+        return self.intensity / (self.kc + self.kl * d + self.kq * (d ** 2))
 
-#TODO: NIR
+
 class SpotLight(LightSource):
     def __init__(self, intensity, position, direction, kc, kl, kq):
         super().__init__(intensity)
@@ -77,7 +80,6 @@ class SpotLight(LightSource):
         v_direction = normalize(self.position - intersection)
         return Ray(intersection, v_direction)
 
-
     def get_distance_from_light(self, intersection):
         return np.linalg.norm(intersection - self.position)
 
@@ -87,7 +89,8 @@ class SpotLight(LightSource):
         lr = self.get_light_ray(intersection)
         return self.intensity * (np.dot(self.direction, lr.direction)) / f_att
 
-#TOOD: ORI
+
+# TOOD: ORI
 class Ray:
     def __init__(self, origin, direction):
         self.origin = origin
@@ -96,10 +99,21 @@ class Ray:
     # The function is getting the collection of objects in the scene and looks for the one with minimum distance.
     # The function should return the nearest object and its distance (in two different arguments)
     def nearest_intersected_object(self, objects):
-        intersections = None
+        # intersections = None
+        # nearest_object = None
+        # min_distance = np.inf
+        # #TODO
+        # return nearest_object, min_distance
+
         nearest_object = None
         min_distance = np.inf
-        #TODO
+
+        for obj in objects:
+            distance_object_tuple = obj.intersect(ray=self)
+
+            if distance_object_tuple and distance_object_tuple[0] < min_distance:
+                min_distance, nearest_object = distance_object_tuple
+
         return nearest_object, min_distance
 
 
@@ -136,6 +150,7 @@ class Rectangle(Object3D):
         b                 c
         This function gets the vertices and creates a rectangle object
     """
+
     def __init__(self, a, b, c, d):
         """
             ul -> bl -> br -> ur
@@ -144,15 +159,42 @@ class Rectangle(Object3D):
         self.normal = self.compute_normal()
 
     def compute_normal(self):
-        # TODO
-        n = np.array()
-        return n
+        ab = self.abcd[1] - self.abcd[0]
+        ad = self.abcd[3] - self.abcd[0]
+        n = np.cross(ab, ad)
+        return n / np.linalg.norm(n)
 
     # Intersect returns both distance and nearest object.
     # Keep track of both.
     def intersect(self, ray: Ray):
-        #TODO
-        pass
+        plane_abcd = Plane(self.normal, self.abcd[0])
+        if plane_abcd.intersect(ray) is not None:
+            P_t = plane_abcd.intersect(ray)
+        else:
+            return None
+
+        P = ray.origin + (P_t * ray.direction)
+        vectors = self.abcd - P
+
+        cross_products = np.cross(np.roll(vectors, -1, axis=0), vectors)
+        dot_products = np.dot(cross_products, self.normal)
+        eqs = dot_products.tolist()
+
+        if all(eq > 0 for eq in eqs):
+            return P_t, self
+        else:
+            return None
+
+        #
+        # eq1 = np.dot(np.cross(vectors[0], vectors[1]), self.normal)
+        # eq2 = np.dot(np.cross(vectors[1], vectors[2]), self.normal)
+        # eq3 = np.dot(np.cross(vectors[2], vectors[3]), self.normal)
+        # eq4 = np.dot(np.cross(vectors[3], vectors[0]), self.normal)
+        #
+        # if eq1 > 0 and eq2 > 0 and eq3 > 0 and eq4 > 0:
+        #     return P_t, self
+        # else:
+        #     return None
 
 
 class Cuboid(Object3D):
@@ -168,19 +210,33 @@ class Cuboid(Object3D):
            b+--------+/c
         """
         A = B = C = D = E = F = None
-        self.face_list = [A,B,C,D,E,F]
+        self.face_list = [A, B, C, D, E, F]
+        self.vertices = [a, b, c, d, e, f]
+        self.create_rectangles_faces()
+
+    def create_rectangles_faces(self):
+        a, b, c, d, e, f = self.vertices
+        A = Rectangle(a, b, c, d)
+        B = Rectangle(d, c, f, e)
+        C = Rectangle(e, f, b, a)
+        D = Rectangle(d, e, a, c)
+        E = Rectangle(b, f, c, a)
+        F = Rectangle(e, d, b, f)
+
+        self.face_list = [A, B, C, D, E, F]
 
     def apply_materials_to_faces(self):
         for t in self.face_list:
-            t.set_material(self.ambient,self.diffuse,self.specular,self.shininess,self.reflection)
+            t.set_material(self.ambient, self.diffuse, self.specular, self.shininess, self.reflection)
 
     # Hint: Intersect returns both distance and nearest object.
     # Keep track of both
     def intersect(self, ray: Ray):
-        #TODO
-        pass
+        min_distance, nearest_object = ray.nearest_intersected_object(self.face_list)
 
-#TODO: NIR
+        return nearest_object, min_distance if nearest_object else None
+
+
 class Sphere(Object3D):
     def __init__(self, center, radius: float):
         self.center = center
