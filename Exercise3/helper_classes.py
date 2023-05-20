@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 
 EPSILON = 0.00001
@@ -99,22 +101,24 @@ class Ray:
     # The function is getting the collection of objects in the scene and looks for the one with minimum distance.
     # The function should return the nearest object and its distance (in two different arguments)
     def nearest_intersected_object(self, objects):
-        # intersections = None
-        # nearest_object = None
-        # min_distance = np.inf
-        # #TODO
-        # return nearest_object, min_distance
-
+        intersections = None
         nearest_object = None
         min_distance = np.inf
 
+        intersections = {}
+
         for obj in objects:
-            distance_object_tuple = obj.intersect(ray=self)
+            if obj.intersect(self):
+                distance_object_tuple = obj.intersect(self)
+                intersections[distance_object_tuple[1]] = distance_object_tuple[0]
 
-            if distance_object_tuple and distance_object_tuple[0] < min_distance:
-                min_distance, nearest_object = distance_object_tuple
+        if len(intersections) == 0:
+            return None
 
-        return nearest_object, min_distance
+        if distance_object_tuple and distance_object_tuple[0] < min_distance:
+            min_distance, nearest_object = distance_object_tuple
+
+        return min_distance, nearest_object
 
 
 class Object3D:
@@ -144,8 +148,8 @@ class Rectangle(Object3D):
     """
         A rectangle is defined by a list of vertices as follows:
         a _ _ _ _ _ _ _ _ d
-         |               |  
-         |               |  
+         |               |
+         |               |
          |_ _ _ _ _ _ _ _|
         b                 c
         This function gets the vertices and creates a rectangle object
@@ -162,26 +166,26 @@ class Rectangle(Object3D):
         ab = self.abcd[1] - self.abcd[0]
         ad = self.abcd[3] - self.abcd[0]
         n = np.cross(ab, ad)
-        return n / np.linalg.norm(n)
+        return normalize(n)
 
     # Intersect returns both distance and nearest object.
     # Keep track of both.
     def intersect(self, ray: Ray):
         plane_abcd = Plane(self.normal, self.abcd[0])
         if plane_abcd.intersect(ray) is not None:
-            P_t = plane_abcd.intersect(ray)
-        else:
-            return None
+            t, _ = plane_abcd.intersect(ray)
+            P_t = ray.origin + t * ray.direction
 
-        P = ray.origin + (P_t * ray.direction)
-        vectors = self.abcd - P
+            vectors = self.abcd - P_t
 
-        cross_products = np.cross(np.roll(vectors, -1, axis=0), vectors)
-        dot_products = np.dot(cross_products, self.normal)
-        eqs = dot_products.tolist()
+            cross_products = np.cross(np.roll(vectors, -1, axis=0), vectors)
+            dot_products = np.dot(cross_products, self.normal)
+            eqs = dot_products.tolist()
+            if all(eq > 0 for eq in eqs):
+                return t, self
+            else:
+                return None
 
-        if all(eq > 0 for eq in eqs):
-            return P_t, self
         else:
             return None
 
@@ -196,10 +200,29 @@ class Rectangle(Object3D):
         # else:
         #     return None
 
+        # n = self.compute_normal()
+        # X = self.abcd
+        # # check if the noraml dot the direction of the ray is 0
+        # if np.dot(n, ray.direction) == 0:
+        #     return None
+        # plane = Plane(n, self.abcd[0])
+        # if plane.intersect(ray):
+        #     t, _ = plane.intersect(ray)
+        #     p = ray.origin + t * ray.direction
+        #
+        #     for i in range(4):
+        #         p1 = (X[i] - p)
+        #         p2 = (X[(i + 1) % 4] - p)
+        #         if not np.dot(n, np.cross(p1, p2)) > 0:
+        #             return None
+        #
+        #     return t, self
+        # else:
+        #     return None
 
 class Cuboid(Object3D):
     def __init__(self, a, b, c, d, e, f):
-        """ 
+        """
               g+---------+f
               /|        /|
              / |  E C  / |
@@ -216,12 +239,14 @@ class Cuboid(Object3D):
 
     def create_rectangles_faces(self):
         a, b, c, d, e, f = self.vertices
+        h = [e[0] - (c[0] - b[0]), e[1] - (c[1] - b[1]), e[2] - (c[2] - b[2])]
+        g = [f[0] - (d[0] - a[0]), f[1] - (d[1] - a[1]), f[2] - (d[2] - a[2])]
         A = Rectangle(a, b, c, d)
         B = Rectangle(d, c, f, e)
-        C = Rectangle(e, f, b, a)
-        D = Rectangle(d, e, a, c)
-        E = Rectangle(b, f, c, a)
-        F = Rectangle(e, d, b, f)
+        C = Rectangle(e, f, g, h)
+        D = Rectangle(a, b, h, g)
+        E = Rectangle(g, f, a, d)
+        F = Rectangle(b, c, e, h)
 
         self.face_list = [A, B, C, D, E, F]
 
@@ -232,9 +257,7 @@ class Cuboid(Object3D):
     # Hint: Intersect returns both distance and nearest object.
     # Keep track of both
     def intersect(self, ray: Ray):
-        min_distance, nearest_object = ray.nearest_intersected_object(self.face_list)
-
-        return nearest_object, min_distance if nearest_object else None
+        return ray.nearest_intersected_object(self.face_list)
 
 
 class Sphere(Object3D):
@@ -243,12 +266,34 @@ class Sphere(Object3D):
         self.radius = radius
 
     def intersect(self, ray: Ray):
-        b = 2 * np.dot(ray.direction, ray.origin - self.center)
-        c = np.linalg.norm(ray.origin - self.center) ** 2 - (self.radius ** 2)
-        squerEqueation = b ** 2 - 4 * c
-        if squerEqueation > 0:
-            x1 = (-b + np.sqrt(squerEqueation)) / 2
-            x2 = (-b - np.sqrt(squerEqueation)) / 2
-            if x1 > 0 and x2 > 0:
-                return min(x1, x2), self
-        return None, None
+        # b = 2 * np.dot(ray.direction, ray.origin - self.center)
+        # c = np.linalg.norm(ray.origin - self.center) ** 2 - (self.radius ** 2)
+        # squerEqueation = b ** 2 - 4 * c
+        # if squerEqueation > 0:
+        #     x1 = (-b + np.sqrt(squerEqueation)) / 2
+        #     x2 = (-b - np.sqrt(squerEqueation)) / 2
+        #     if x1 > 0 and x2 > 0:
+        #         return min(x1, x2), self
+        # return None, None
+
+        # Calculate vector from ray origin to sphere center
+        ray_to_center = self.center - ray.origin
+
+        # Calculate dot product of vector and ray direction
+        vector_dot_ray_direction = np.dot(ray_to_center, ray.direction)
+
+        # Calculate discriminant
+        discriminant = vector_dot_ray_direction ** 2 - np.sum(np.power(ray_to_center, 2)) + self.radius ** 2
+
+        if discriminant < 0:
+            return None
+
+        t1 = vector_dot_ray_direction - math.sqrt(discriminant)
+        t2 = vector_dot_ray_direction + math.sqrt(discriminant)
+
+        if t1 < 0 and t2 < 0:
+            return None
+        else:
+            min_t = min(t1, t2)
+            return min_t, self
+
