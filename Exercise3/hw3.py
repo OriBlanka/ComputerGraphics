@@ -40,74 +40,45 @@ def get_color(ray, ambient, obj, hitP, lights, objects, max_depth, level):
     sigma = 0
     normal = None
     if isinstance(obj, Sphere):
-        vector_a = hitP - obj.center
-        normal = normalize(vector_a)
+        normal = normalize(hitP - obj.center)
     else:
         normal = obj.normal
 
-
-    calacNormalScal = 0.01 * normal
-    hitP = hitP + calacNormalScal
-
+    hitP = hitP + 0.01 * normal
     for light in lights:
-        light_Ray = light.get_light_ray(hitP)
-        Intensity_L = light.get_intensity(hitP)
-        K_Diffuse = obj.diffuse
-        K_Specular = obj.specular
-        Norm = normal
-        Ligh = light.get_light_ray(hitP).direction
-        VectorPreNormilized = ray.origin - hitP
-        VectorNormalized = normalize(VectorPreNormilized)
-        L_Reflected = reflected(Ligh, Norm)
+        light_ray = light.get_light_ray(hitP)
+        L = light.get_light_ray(hitP).direction
+        V = normalize(ray.origin - hitP)
+        L_R = reflected(L, normal)
         s_j = 1
-        if light_Ray.nearest_intersected_object(objects):
-            min_distance, nearest_object = light_Ray.nearest_intersected_object(objects)
+        if light_ray.nearest_intersected_object(objects):
+            min_distance, nearest_object = light_ray.nearest_intersected_object(objects)
             s_j = calculate_s_j(ray, hitP, min_distance, nearest_object)
-        calc1 = (K_Diffuse * Intensity_L * np.dot(Norm, Ligh))
-        calc2 = (K_Specular * Intensity_L * (np.dot(VectorNormalized, L_Reflected)))
-        calc3 = (obj.shininess / 10)
-        sigma = sigma + s_j * (calc1 + calc2 ** calc3)
+        sigma = sigma + s_j * (obj.diffuse * light.get_intensity(hitP) * np.dot(normal, L) + obj.specular * light.get_intensity(hitP) * (np.dot(V, L_R) ** (obj.shininess / 10)))
 
-
-    I_ambient = ambient
-    K_ambient = obj.ambient
-    ambientMulti = K_ambient * I_ambient
-    color = ambientMulti+ sigma
-
+    color = obj.ambient * ambient + sigma
     level = level + 1
     if level > max_depth:
         return color
 
-    # reflection
-    # construct new_ray
     reflected_ray = Ray(hitP, reflected(ray.direction, normal))
-    # construct new hitP
+
     if reflected_ray.nearest_intersected_object(objects):
         min_distance, nearest_object = reflected_ray.nearest_intersected_object(objects)
-        Calc4 = min_distance * reflected_ray.direction
-        new_HitPoint = reflected_ray.origin + Calc4
-
+        new_hitP = reflected_ray.origin + min_distance * reflected_ray.direction
         if isinstance(nearest_object, Sphere):
-            vectorcalcpreNorm = new_HitPoint - nearest_object.center
-            normal = normalize(vectorcalcpreNorm)
+            normal = normalize(new_hitP - nearest_object.center)
         else:
             normal = nearest_object.normal
-        scalernorm = 0.01 * normal
-        new_hitpoint = new_HitPoint + scalernorm
-        # recursion call
+        new_hitP = new_hitP + 0.01 * normal
 
-        oclor = get_color(reflected_ray, ambient, nearest_object, new_hitpoint, lights, objects, max_depth, level)
-        color = color + obj.reflection * oclor
+        color = color + obj.reflection * get_color(reflected_ray, ambient, nearest_object, new_hitP, lights, objects, max_depth, level)
     return color
 
 # TODO: Change function to our version
 def calculate_s_j(ray, hitP, min_distance, nearest_object):
     s_j = 1
-    vectorprenorm = ray.origin - hitP
-    distance_from_camera = np.linalg.norm(vectorprenorm)
-
-    distancecheck = distance_from_camera > min_distance
-    if nearest_object and distancecheck:
+    if nearest_object and np.linalg.norm(ray.origin - hitP) > min_distance:
         s_j = 0
 
     return s_j
@@ -139,7 +110,7 @@ def your_own_scene():
     cuboid.apply_materials_to_faces()
 
     light1 = PointLight(intensity=np.array([1, 1, 1]), position=np.array([1, 1.5, 1]), kc=0.1, kl=0.1, kq=0.1)
-    light2 = DirectionalLight(intensity= np.array([1, 1, 1]),direction=np.array([1,1,1]))
+    light2 = DirectionalLight(intensity=np.array([1, 1, 1]), direction=np.array([1, 1, 1]))
     lights = [light1, light2]
     objects = [sphere_a, sphere_b, cuboid, plane]
     return camera, lights, objects
