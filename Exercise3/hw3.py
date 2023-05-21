@@ -75,7 +75,6 @@ def get_color(ray, ambient, obj, hitP, lights, objects, max_depth, level):
         color = color + obj.reflection * get_color(reflected_ray, ambient, nearest_object, new_hitP, lights, objects, max_depth, level)
     return color
 
-# TODO: Change function to our version
 def calculate_s_j(ray, hitP, min_distance, nearest_object):
     s_j = 1
     if nearest_object and np.linalg.norm(ray.origin - hitP) > min_distance:
