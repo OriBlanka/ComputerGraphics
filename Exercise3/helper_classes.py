@@ -233,19 +233,18 @@ class Sphere(Object3D):
         ray_to_center = self.center - ray.origin
 
         # Calculate dot product of vector and ray direction
-        vector_dot_ray_direction = np.dot(ray_to_center, ray.direction)
+        vector_dot_product_ray_direction = np.dot(ray_to_center, ray.direction)
 
         # Calculate discriminant
-        discriminant = vector_dot_ray_direction ** 2 - np.sum(np.power(ray_to_center, 2)) + self.radius ** 2
+        discriminant = vector_dot_product_ray_direction ** 2 - np.sum(np.power(ray_to_center, 2)) + self.radius ** 2
 
         if discriminant < 0:
             return None
 
-        t1 = vector_dot_ray_direction - math.sqrt(discriminant)
-        t2 = vector_dot_ray_direction + math.sqrt(discriminant)
+        t1result = vector_dot_product_ray_direction - math.sqrt(discriminant)
+        t2result = vector_dot_product_ray_direction + math.sqrt(discriminant)
 
-        if t1 < 0 and t2 < 0:
+        if t1result < 0 and t2result < 0:
             return None
         else:
-            min_t = min(t1, t2)
-            return min_t, self
+            return min(t1result, t2result), self
